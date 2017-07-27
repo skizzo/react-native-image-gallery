@@ -45,10 +45,8 @@ export default class Gallery extends React.PureComponent {
         }
 
         this.gestureResponder = createResponder({
-            onStartShouldSetResponderCapture: (evt, gestureState) => true,
-            onStartShouldSetResponder: (evt, gestureState) => {
-                return true;
-            },
+            onStartShouldSetResponderCapture: () => true,
+            onStartShouldSetResponder: () => true,
             onResponderGrant: (evt, gestureState) => {
                 this.activeImageResponder(evt, gestureState);
             },
@@ -83,8 +81,8 @@ export default class Gallery extends React.PureComponent {
             },
             onResponderRelease: onResponderReleaseOrTerminate.bind(this),
             onResponderTerminate: onResponderReleaseOrTerminate.bind(this),
-            onResponderTerminationRequest: (evt, gestureState) => false, // Do not allow parent view to intercept gesture
-            onResponderSingleTapConfirmed: (evt, gestureState) => {
+            onResponderTerminationRequest: () => false, // Do not allow parent view to intercept gesture
+            onResponderSingleTapConfirmed: () => {
                 this.props.onSingleTapConfirmed && this.props.onSingleTapConfirmed(this.currentPage);
             },
         });
@@ -130,16 +128,8 @@ export default class Gallery extends React.PureComponent {
         };
     }
 
-    componentDidMount() {
-        this._isMounted = true;
-    }
-
     componentWillReceiveProps(props) {
         console.log('GOT PROPS', props);
-    }
-
-    componentWillUnmount() {
-        this._isMounted = false;
     }
 
     @autobind
@@ -234,10 +224,6 @@ export default class Gallery extends React.PureComponent {
 
     @autobind
     onLoad(pageId, source, imageKey) {
-        console.log(imageKey);
-        if (!this._isMounted) {
-            return;
-        }
         if (source.uri) {
             Image.getSize(
                 source.uri,
@@ -300,7 +286,7 @@ export default class Gallery extends React.PureComponent {
             <View
               style={{width: layout.width, height: layout.height}}
             >
-                {this.renderLowRes(pageData, pageId, layout)}
+                {/* {this.renderLowRes(pageData, pageId, layout)} */}
                 {this.renderTransformable(pageData, pageId, layout)}
             </View>
         );
@@ -364,18 +350,25 @@ export default class Gallery extends React.PureComponent {
             >
                 <TransformableImage
                   {...props}
-                  onLoad={() => this.onLoad(pageId, pageData.source, key)}
+                  onLoad={() => {
+                      console.log('TransformableImage onLoad');
+                      this.onLoad(pageId, pageData.source, key);
+                  }}
                   onViewTransformed={((transform) => {
+                      console.log('TransformableImage onViewTransformed');
+
                       if (onViewTransformed) {
                           onViewTransformed(transform, pageId);
                       }
                   })}
                   onTransformGestureReleased={((transform) => {
+                      console.log('TransformableImage onTransformGestureReleased');
+
                       if (onTransformGestureReleased) {
                           onTransformGestureReleased(transform, pageId);
                       }
                   })}
-                  ref={((ref) => { this.imageRefs.set(pageId, ref); })}
+                  ref={((ref) => { this.imageRefs.set(key, ref); })}
                   key={key}
                   style={[style, overrideStyles]}
                   source={pageData.source}
