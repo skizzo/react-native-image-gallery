@@ -42,6 +42,8 @@ export default class Gallery extends Component {
         this.onPageScrollStateChanged = this.onPageScrollStateChanged.bind(this);
         this.onPageScroll = this.onPageScroll.bind(this);
         this.onLoad = this.onLoad.bind(this);
+        this.isCurrentPage = this.isCurrentPage.bind(this);
+        this.isInitialPage = this.isInitialPage.bind(this);
     }
 
     componentWillMount() {
@@ -271,6 +273,14 @@ export default class Gallery extends Component {
         }
     }
 
+    isCurrentPage(pageId) {
+        return parseInt(pageId) === this.currentPage;
+    }
+
+    isInitialPage(pageId) {
+        return parseInt(pageId) === this.props.initialPage;
+    }
+
     renderPage(pageData, pageId, layout) {
         return (
             <View
@@ -288,6 +298,9 @@ export default class Gallery extends Component {
         if (!pageData.lowResSource) {
             return null;
         }
+        if (this.isInitialPage(pageId)) {
+            return null;
+        }
 
         return (
             <Image
@@ -303,8 +316,7 @@ export default class Gallery extends Component {
     }
 
     renderTransformable(pageData, pageId, layout) {
-        const isCurrent = parseInt(pageId) === this.currentPage;
-        if (!isCurrent && pageData.lowResSource) {
+        if (!this.isCurrentPage(pageId) && pageData.lowResSource) {
             return null;
         }
 
@@ -315,15 +327,20 @@ export default class Gallery extends Component {
 
         this.animatedValues[key] = new Animated.Value(0.5);
 
+        const overrideStyles = {
+            width: layout.width,
+            height: layout.height,
+        };
+        if (pageData.lowResSource) {
+            overrideStyles.backgroundColor = 'transparent';
+        }
+
         return (
             <Animated.View
               style={[
-                  {
-                      width: layout.width,
-                      height: layout.height,
-                      opacity: this.animatedValues[key],
-                  },
                   style,
+                  overrideStyles,
+                  this.isInitialPage(pageId) ? {opacity: this.animatedValues[key]} : {},
               ]}
             >
                 <TransformableImage
@@ -341,13 +358,7 @@ export default class Gallery extends Component {
                   })}
                   ref={((ref) => { this.imageRefs.set(pageId, ref); })}
                   key={key}
-                  style={[
-                      {
-                          width: layout.width,
-                          height: layout.height,
-                      },
-                      style,
-                  ]}
+                  style={[style, overrideStyles]}
                   source={pageData.source}
                   pixels={this.state.imagesDimensions[pageId] || pageData.dimensions || pageData.dimensions || {}}
                 >
