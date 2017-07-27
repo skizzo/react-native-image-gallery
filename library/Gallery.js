@@ -1,10 +1,10 @@
-import React, {Component, PropTypes} from 'react';
+import React, {PropTypes} from 'react';
 import {View, Image, Animated} from 'react-native';
 import {createResponder} from 'react-native-gesture-responder';
 import TransformableImage from 'react-native-transformable-image';
 import ViewPager from '@ldn0x7dc/react-native-view-pager';
 
-export default class Gallery extends Component {
+export default class Gallery extends React.PureComponent {
 
     static propTypes = {
         ...View.propTypes,
@@ -230,6 +230,7 @@ export default class Gallery extends Component {
     }
 
     onLoad(pageId, source, imageKey) {
+        console.log(imageKey);
         if (!this._isMounted) {
             return;
         }
@@ -295,12 +296,15 @@ export default class Gallery extends Component {
     renderLowRes(pageData, pageId, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
         const key = `lowResImage#${pageId}`;
+        console.log('will render low res', key);
         if (!pageData.lowResSource) {
             return null;
         }
+        console.log('so far', key);
         if (this.isInitialPage(pageId)) {
             return null;
         }
+        console.log('Yes!', key);
 
         return (
             <Image
@@ -340,7 +344,7 @@ export default class Gallery extends Component {
               style={[
                   style,
                   overrideStyles,
-                  this.isInitialPage(pageId) ? {opacity: this.animatedValues[key]} : {},
+                  //this.isInitialPage(pageId) ? {opacity: this.animatedValues[key]} : {},
               ]}
             >
                 <TransformableImage
@@ -381,6 +385,7 @@ export default class Gallery extends Component {
     }
 
     render() {
+        console.warn('rendering gallery');
         let gestureResponder = this.gestureResponder;
 
         let images = this.props.images;
