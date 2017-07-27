@@ -1,6 +1,6 @@
-import React, { Component, PropTypes } from 'react';
-import { View, Image } from 'react-native';
-import { createResponder } from 'react-native-gesture-responder';
+import React, {Component, PropTypes} from 'react';
+import {View, Image, Animated} from 'react-native';
+import {createResponder} from 'react-native-gesture-responder';
 import TransformableImage from 'react-native-transformable-image';
 import ViewPager from '@ldn0x7dc/react-native-view-pager';
 
@@ -16,7 +16,7 @@ export default class Gallery extends Component {
         onPageScroll: PropTypes.func,
         onSingleTapConfirmed: PropTypes.func,
         onGalleryStateChanged: PropTypes.func,
-        onLongPress: PropTypes.func
+        onLongPress: PropTypes.func,
     };
 
     imageRefs = new Map();
@@ -25,22 +25,27 @@ export default class Gallery extends Component {
     currentPage = 0;
     pageCount = 0;
     gestureResponder = undefined;
+    animatedValues = [];
+    galleryViewPager = null;
 
-    constructor (props) {
+    constructor(props) {
         super(props);
         this.state = {
             imagesLoaded: [],
-            imagesDimensions: []
+            imagesDimensions: [],
         };
         this.setImageLoaded = this.setImageLoaded.bind(this);
         this.renderPage = this.renderPage.bind(this);
+        this.renderLowRes = this.renderLowRes.bind(this);
+        this.renderTransformable = this.renderTransformable.bind(this);
         this.onPageSelected = this.onPageSelected.bind(this);
         this.onPageScrollStateChanged = this.onPageScrollStateChanged.bind(this);
         this.onPageScroll = this.onPageScroll.bind(this);
+        this.onLoad = this.onLoad.bind(this);
     }
 
-    componentWillMount () {
-        function onResponderReleaseOrTerminate (evt, gestureState) {
+    componentWillMount() {
+        function onResponderReleaseOrTerminate(evt, gestureState) {
             if (this.activeResponder) {
                 if (this.activeResponder === this.viewPagerResponder &&
                     !this.shouldScrollViewPager(evt, gestureState) &&
@@ -96,7 +101,7 @@ export default class Gallery extends Component {
             onResponderTerminationRequest: (evt, gestureState) => false, // Do not allow parent view to intercept gesture
             onResponderSingleTapConfirmed: (evt, gestureState) => {
                 this.props.onSingleTapConfirmed && this.props.onSingleTapConfirmed(this.currentPage);
-            }
+            },
         });
 
         this.viewPagerResponder = {
@@ -108,12 +113,15 @@ export default class Gallery extends Component {
             },
             onEnd: (evt, gestureState, disableSettle) => {
                 this.getViewPagerInstance().onResponderRelease(evt, gestureState, disableSettle);
-            }
+            },
         };
 
         this.imageResponder = {
             onStart: (evt, gestureState) => {
-                this.getCurrentImageTransformer().onResponderGrant(evt, gestureState);
+                const transformer = this.getCurrentImageTransformer();
+                if (transformer) {
+                    transformer.onResponderGrant(evt, gestureState);
+                }
                 if (this.props.onLongPress) {
                     this._longPressTimeout = setTimeout(() => {
                         this.props.onLongPress(gestureState);
@@ -121,29 +129,38 @@ export default class Gallery extends Component {
                 }
             },
             onMove: (evt, gestureState) => {
-                this.getCurrentImageTransformer().onResponderMove(evt, gestureState);
+                const transformer = this.getCurrentImageTransformer();
+                if (transformer) {
+                    transformer.onResponderMove(evt, gestureState);
+                }
                 clearTimeout(this._longPressTimeout);
             },
             onEnd: (evt, gestureState) => {
-                this.getCurrentImageTransformer().onResponderRelease(evt, gestureState);
+                const transformer = this.getCurrentImageTransformer();
+                if (transformer) {
+                    transformer.onResponderRelease(evt, gestureState);
+                }
                 clearTimeout(this._longPressTimeout);
-            }
+            },
         };
     }
 
-    componentDidMount () {
+    componentDidMount() {
         this._isMounted = true;
     }
 
-    componentWillUnmount () {
+    componentWillUnmount() {
         this._isMounted = false;
     }
 
-    shouldScrollViewPager (evt, gestureState) {
+    shouldScrollViewPager(evt, gestureState) {
         if (gestureState.numberActiveTouches > 1) {
             return false;
         }
         const viewTransformer = this.getCurrentImageTransformer();
+        if (!viewTransformer) {
+            return false;
+        }
         const space = viewTransformer.getAvailableTranslateSpace();
         const dx = gestureState.moveX - gestureState.previousMoveX;
 
@@ -156,17 +173,18 @@ export default class Gallery extends Component {
         return false;
     }
 
-    activeImageResponder (evt, gestureState) {
+    activeImageResponder(evt, gestureState) {
         if (this.activeResponder !== this.imageResponder) {
             if (this.activeResponder === this.viewPagerResponder) {
-                this.viewPagerResponder.onEnd(evt, gestureState, true); // pass true to disable ViewPager settle
+                // pass true to disable ViewPager settle
+                this.viewPagerResponder.onEnd(evt, gestureState, true);
             }
             this.activeResponder = this.imageResponder;
             this.imageResponder.onStart(evt, gestureState);
         }
     }
 
-    activeViewPagerResponder (evt, gestureState) {
+    activeViewPagerResponder(evt, gestureState) {
         if (this.activeResponder !== this.viewPagerResponder) {
             if (this.activeResponder === this.imageResponder) {
                 this.imageResponder.onEnd(evt, gestureState);
@@ -176,40 +194,40 @@ export default class Gallery extends Component {
         }
     }
 
-    getImageTransformer (page) {
+    getImageTransformer(page) {
         if (page >= 0 && page < this.pageCount) {
-            let ref = this.imageRefs.get(page + '');
+            const ref = this.imageRefs.get(`${page}`);
             if (ref) {
                 return ref.getViewTransformerInstance();
             }
         }
     }
 
-    getCurrentImageTransformer () {
+    getCurrentImageTransformer() {
         return this.getImageTransformer(this.currentPage);
     }
 
-    getViewPagerInstance () {
-        return this.refs['galleryViewPager'];
+    getViewPagerInstance() {
+        return this.galleryViewPager;
     }
 
-    onPageSelected (page) {
+    onPageSelected(page) {
         this.currentPage = page;
         this.props.onPageSelected && this.props.onPageSelected(page);
     }
 
-    onPageScrollStateChanged (state) {
+    onPageScrollStateChanged(state) {
         if (state === 'idle') {
             this.resetHistoryImageTransform();
         }
         this.props.onPageScrollStateChanged && this.props.onPageScrollStateChanged(state);
     }
 
-    onPageScroll (e) {
+    onPageScroll(e) {
         this.props.onPageScroll && this.props.onPageScroll(e);
     }
 
-    onLoad (pageId, source) {
+    onLoad(pageId, source, imageKey) {
         if (!this._isMounted) {
             return;
         }
@@ -217,58 +235,129 @@ export default class Gallery extends Component {
             Image.getSize(
                 source.uri,
                 (width, height) => {
-                    this.setImageLoaded(pageId, { width, height });
+                    this.setImageLoaded(pageId, {width, height});
+                    if (this.animatedValues[imageKey]) {
+                        Animated.timing(
+                            this.animatedValues[imageKey],
+                            {
+                                useNativeDriver: true,
+                                toValue: 1,
+                                duration: 200, // FIXME: Configurable maybe?
+                            }
+                        ).start();
+                    }
                 },
                 () => this.setImageLoaded(pageId, false)
             );
         } else {
             this.setImageLoaded(pageId, false);
         }
-    };
+    }
 
-    setImageLoaded (pageId, dimensions) {
+    setImageLoaded(pageId, dimensions) {
         this.setState({
             imagesLoaded: {
                 ...this.state.imagesLoaded,
-                [pageId]: true
-            }
+                [pageId]: true,
+            },
         });
         if (dimensions) {
             this.setState({
                 imagesDimensions: {
                     ...this.state.imagesDimensions,
-                    [pageId]: dimensions
-                }
+                    [pageId]: dimensions,
+                },
             });
         }
     }
 
-    renderPage (pageData, pageId, layout) {
-        const { onViewTransformed, onTransformGestureReleased, loader, ...other } = this.props;
-        const loaded = this.state.imagesLoaded[pageId] && this.state.imagesLoaded[pageId] === true;
-        const loadingView = !loaded && loader ? loader : false;
+    renderPage(pageData, pageId, layout) {
         return (
-            <TransformableImage
-              {...other}
-              onLoad={(evt) => this.onLoad(pageId, pageData.source)}
-              onViewTransformed={((transform) => {
-                  onViewTransformed && onViewTransformed(transform, pageId);
-              })}
-              onTransformGestureReleased={((transform) => {
-                  onTransformGestureReleased && onTransformGestureReleased(transform, pageId);
-              })}
-              ref={((ref) => { this.imageRefs.set(pageId, ref); })}
-              key={'innerImage#' + pageId}
+            <View
               style={{width: layout.width, height: layout.height}}
-              source={pageData.source}
-              pixels={this.state.imagesDimensions[pageId] || pageData.dimensions || pageData.dimensions || {}}
             >
-                { loadingView }
-            </TransformableImage>
+                {this.renderLowRes(pageData, pageId, layout)}
+                {this.renderTransformable(pageData, pageId, layout)}
+            </View>
         );
     }
 
-    resetHistoryImageTransform () {
+    renderLowRes(pageData, pageId, layout) {
+        const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
+        const key = `lowResImage#${pageId}`;
+        if (!pageData.lowResSource) {
+            return null;
+        }
+
+        return (
+            <Image
+              {...props}
+              // FIXME: Should maybe call a separate callback for low res
+              onLoad={() => this.onLoad(pageId, pageData.source, key)}
+              key={key}
+              style={[{width: layout.width, height: layout.height}, style]}
+              resizeMode={'contain'}
+              source={pageData.source}
+            />
+        );
+    }
+
+    renderTransformable(pageData, pageId, layout) {
+        const isCurrent = parseInt(pageId) === this.currentPage;
+        if (!isCurrent && pageData.lowResSource) {
+            return null;
+        }
+
+        const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
+        const loaded = this.state.imagesLoaded[pageId] && this.state.imagesLoaded[pageId] === true;
+        const loadingView = !loaded && loader ? loader : false;
+        const key = `innerImage#${pageId}`;
+
+        this.animatedValues[key] = new Animated.Value(0.5);
+
+        return (
+            <Animated.View
+              style={[
+                  {
+                      width: layout.width,
+                      height: layout.height,
+                      opacity: this.animatedValues[key],
+                  },
+                  style,
+              ]}
+            >
+                <TransformableImage
+                  {...props}
+                  onLoad={() => this.onLoad(pageId, pageData.source, key)}
+                  onViewTransformed={((transform) => {
+                      if (onViewTransformed) {
+                          onViewTransformed(transform, pageId);
+                      }
+                  })}
+                  onTransformGestureReleased={((transform) => {
+                      if (onTransformGestureReleased) {
+                          onTransformGestureReleased(transform, pageId);
+                      }
+                  })}
+                  ref={((ref) => { this.imageRefs.set(pageId, ref); })}
+                  key={key}
+                  style={[
+                      {
+                          width: layout.width,
+                          height: layout.height,
+                      },
+                      style,
+                  ]}
+                  source={pageData.source}
+                  pixels={this.state.imagesDimensions[pageId] || pageData.dimensions || pageData.dimensions || {}}
+                >
+                    { loadingView }
+                </TransformableImage>
+            </Animated.View>
+        );
+    }
+
+    resetHistoryImageTransform() {
         let transformer = this.getImageTransformer(this.currentPage + 1);
         if (transformer) {
             transformer.forceUpdateTransform({scale: 1, translateX: 0, translateY: 0});
@@ -280,7 +369,7 @@ export default class Gallery extends Component {
         }
     }
 
-    render () {
+    render() {
         let gestureResponder = this.gestureResponder;
 
         let images = this.props.images;
@@ -296,7 +385,7 @@ export default class Gallery extends Component {
         return (
             <ViewPager
               {...this.props}
-              ref={'galleryViewPager'}
+              ref={(galleryViewPager) => { this.galleryViewPager = galleryViewPager; }}
               scrollEnabled={false}
               renderPage={this.renderPage}
               pageDataArray={images}
