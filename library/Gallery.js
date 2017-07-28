@@ -18,6 +18,7 @@ export default class Gallery extends React.Component {
         onSingleTapConfirmed: PropTypes.func,
         onGalleryStateChanged: PropTypes.func,
         onLongPress: PropTypes.func,
+        imageComponent: PropTypes.func,
     };
 
     componentWillMount() {
@@ -29,6 +30,7 @@ export default class Gallery extends React.Component {
             this.imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
             this.animatedValues[key] = new Animated.Value(0);
         });
+        console.log('animatedValues created: ', this.animatedValues);
 
         function onResponderReleaseOrTerminate(evt, gestureState) {
             if (this.activeResponder) {
@@ -346,9 +348,12 @@ export default class Gallery extends React.Component {
     renderLowRes(pageData, pageId, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
         const key = `lowResImage#${pageId}`;
+        const ImageComponent = this.props.imageComponent
+            ? this.props.imageComponent
+            : Image;
 
         return (
-            <Image
+            <ImageComponent
               {...props}
               // FIXME: Should maybe call a separate callback for low res
               onLoad={() => this.onLoad(pageId, pageData.source, key)}
