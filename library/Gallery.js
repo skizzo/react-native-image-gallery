@@ -412,40 +412,28 @@ export default class Gallery extends React.Component {
             );
         }
 
-        return this.renderTransformable(
-            pageData.source,
-            pageData.dimensions,
-            pageId,
-            key,
-            layout
+        return (
+            <Animated.View
+              style={[
+                  this.props.style,
+                  {
+                      width: layout.width,
+                      height: layout.height,
+                  },
+                  // this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
+// FIXME:
+                  {opacity: this.animatedValues[key]},
+              ]}
+            >
+                {this.renderTransformable(
+                    pageData.source,
+                    pageData.dimensions,
+                    pageId,
+                    key,
+                    layout
+                )}
+            </Animated.View>
         );
-
-//         return (
-//             <Animated.View
-//               style={[
-//                   this.props.style,
-//                   {
-//                       width: layout.width,
-//                       height: layout.height,
-//                   },
-//                   // this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
-// // FIXME:
-//                   {opacity: this.animatedValues[key]},
-//                   {
-//                       borderWidth: 5,
-//                       borderColor: 'red',
-//                   },
-//               ]}
-//             >
-//                 {this.renderTransformable(
-//                     pageData.source,
-//                     pageData.dimensions,
-//                     pageId,
-//                     key,
-//                     layout
-//                 )}
-//             </Animated.View>
-//         );
     }
 
     renderTransformable(source, dimensions, pageId, key, layout) {
@@ -476,7 +464,7 @@ export default class Gallery extends React.Component {
                       onTransformGestureReleased(transform, pageId);
                   }
               })}
-              ref={((ref) => { this.imageRefs.set(key, ref); })}
+              ref={((ref) => { this.imageRefs.set(pageId, ref); })}
               style={[
                   style,
                   {
