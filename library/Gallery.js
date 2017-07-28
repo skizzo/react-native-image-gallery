@@ -32,8 +32,9 @@ export default class Gallery extends React.Component {
             const key = `innerImage#${pageId}`;
             this.imagesMounted[lowResKey] = !!(image.lowResSource);
             this.imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
-            this.animatedValues[key] = new Animated.Value(0);
+            this.animatedValues[key] = new Animated.Value(0.5);
         });
+        console.log('this.imagesMounted: ', this.imagesMounted);
         console.log('animatedValues created: ', this.animatedValues);
 
         function onResponderReleaseOrTerminate(evt, gestureState) {
@@ -193,7 +194,7 @@ export default class Gallery extends React.Component {
                                 {
                                     useNativeDriver: true,
                                     toValue: 1,
-                                    duration: 200, // FIXME: Configurable maybe?
+                                    duration: 1000, // FIXME: Configurable maybe?
                                 }
                             ).start((result) => {
                                 console.log('animated', result);
@@ -341,7 +342,7 @@ export default class Gallery extends React.Component {
                     : null
                 }
                 {this.imagesMounted[key]
-                    ? this.renderTransformable(pageData, pageId, layout)
+                    ? this.renderHighRes(pageData, pageId, layout)
                     : null
                 }
             </View>
@@ -352,84 +353,119 @@ export default class Gallery extends React.Component {
     renderLowRes(pageData, pageId, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
         const key = `lowResImage#${pageId}`;
+        const iPageId = parseInt(pageId);
 
-        return (
-            <this.props.imageComponent
-              {...props}
-              // FIXME: Should maybe call a separate callback for low res
-              onLoad={() => this.onLoad(pageId, pageData.source, key)}
-              key={key}
-              style={[{width: layout.width, height: layout.height}, style]}
-              resizeMode={'contain'}
-              source={pageData.source}
-            />
+        let shouldMount = true;
+        if (iPageId > this.currentPage + 1) {
+            if (parseInt(this.currentPage) > 0 || iPageId < this.props.images.length - 1) {
+                shouldMount = false;
+            }
+        } else if (iPageId < this.currentPage - 1) {
+            shouldMount = false;
+        }
+
+        if (!shouldMount) {
+            return (
+                <View
+                  {...props}
+                  key={key}
+                  style={[{width: layout.width, height: layout.height}, style]}
+                />
+            );
+        }
+
+        console.log(`rendering ${key}`, layout);
+        return this.renderTransformable(
+            pageData.lowResSource,
+            pageData.dimensions,
+            pageId,
+            key,
+            layout
         );
     }
 
     @autobind
-    renderTransformable(pageData, pageId, layout) {
-        const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
+    renderHighRes(pageData, pageId, layout) {
         const key = `innerImage#${pageId}`;
-        const loaded = this.imagesLoaded[key] && this.imagesLoaded[key] === true;
-        const loadingView = !loaded && loader ? loader : false;
-
-        const overrideStyles = {
-            width: layout.width,
-            height: layout.height,
-        };
 
         console.log(`rendering ${key}`);
         return (
             <Animated.View
               style={[
-                  style,
-                  overrideStyles,
-                  this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
+                  this.props.style,
+                  {
+                      width: layout.width,
+                      height: layout.height,
+                  },
+                  // this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
+// FIXME:
+                  {opacity: this.animatedValues[key]},
                   {
                       borderWidth: 5,
                       borderColor: 'red',
                   },
               ]}
             >
-                <TransformableImage
-                  {...props}
-                  onLoad={() => {
-                      console.log('TransformableImage onLoad');
-                      this.onLoad(pageId, pageData.source, key);
-                  }}
-                  onLoadEnd={({nativeEvent}) => {
-                      console.log('Transformable loadEnd', nativeEvent);
-                  }}
-                  onError={({nativeEvent}) => {
-                      console.log(`error loading ${key}`, nativeEvent);
-                  }}
-                  onViewTransformed={((transform) => {
-                      if (onViewTransformed) {
-                          onViewTransformed(transform, pageId);
-                      }
-                  })}
-                  onTransformGestureReleased={((transform) => {
-                      console.log('TransformableImage onTransformGestureReleased');
-
-                      if (onTransformGestureReleased) {
-                          onTransformGestureReleased(transform, pageId);
-                      }
-                  })}
-                  ref={((ref) => { this.imageRefs.set(key, ref); })}
-                  key={key}
-                  style={[style, overrideStyles, {backgroundColor: 'transparent'}]}
-                  source={pageData.source}
-                  pixels={
-                      this.imagesDimensions[key]
-                      || pageData.dimensions
-                      || {}
-                  }
-                  resizeMethod={'resize'}
-                  imageComponent={this.props.imageComponent}
-                >
-                    { loadingView }
-                </TransformableImage>
+                {this.renderTransformable(
+                    pageData.source,
+                    pageData.dimensions,
+                    pageId,
+                    key,
+                    layout
+                )}
             </Animated.View>
+        );
+    }
+
+    renderTransformable(source, dimensions, pageId, key, layout) {
+        const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
+        const loaded = this.imagesLoaded[key] && this.imagesLoaded[key] === true;
+        const loadingView = !loaded && loader ? loader : false;
+
+        return (
+            <TransformableImage
+              {...props}
+              onLoad={() => {
+                  console.log('TransformableImage onLoad');
+                  this.onLoad(pageId, source, key);
+              }}
+              onLoadEnd={({nativeEvent}) => {
+                  console.log('Transformable loadEnd', nativeEvent);
+              }}
+              onError={({nativeEvent}) => {
+                  console.log(`error loading ${key}`, nativeEvent);
+              }}
+              onViewTransformed={((transform) => {
+                  if (onViewTransformed) {
+                      onViewTransformed(transform, pageId);
+                  }
+              })}
+              onTransformGestureReleased={((transform) => {
+                  console.log('TransformableImage onTransformGestureReleased');
+
+                  if (onTransformGestureReleased) {
+                      onTransformGestureReleased(transform, pageId);
+                  }
+              })}
+              ref={((ref) => { this.imageRefs.set(key, ref); })}
+              style={[
+                  style,
+                  {
+                      width: layout.width,
+                      height: layout.height,
+                      backgroundColor: 'transparent',
+                  },
+              ]}
+              source={source}
+              pixels={
+                  this.imagesDimensions[key]
+                  || dimensions
+                  || {}
+              }
+              imageComponent={this.props.imageComponent}
+            >
+                { loadingView }
+            </TransformableImage>
         );
     }
 
