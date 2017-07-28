@@ -55,6 +55,7 @@ export default class Gallery extends React.Component {
                 this.activeImageResponder(evt, gestureState);
             },
             onResponderMove: (evt, gestureState) => {
+                const passOn = gestureState;
                 if (this.firstMove) {
                     this.firstMove = false;
                     if (this.shouldScrollViewPager(evt, gestureState)) {
@@ -70,24 +71,31 @@ export default class Gallery extends React.Component {
                     if (dx > 0 && offset > 0 && !this.shouldScrollViewPager(evt, gestureState)) {
                         if (dx > offset) { // active image responder
                             this.getViewPagerInstance().scrollByOffset(offset);
-                            gestureState.moveX -= offset;
+                            passOn.moveX -= offset;
                             this.activeImageResponder(evt, gestureState);
                         }
-                    } else if (dx < 0 && offset < 0 && !this.shouldScrollViewPager(evt, gestureState)) {
+                    } else if (
+                        dx < 0 &&
+                        offset < 0 &&
+                        !this.shouldScrollViewPager(evt, gestureState)
+                    ) {
                         if (dx < offset) { // active image responder
                             this.getViewPagerInstance().scrollByOffset(offset);
-                            gestureState.moveX -= offset;
+                            passOn.moveX -= offset;
                             this.activeImageResponder(evt, gestureState);
                         }
                     }
                 }
-                this.activeResponder.onMove(evt, gestureState);
+                this.activeResponder.onMove(evt, passOn);
             },
             onResponderRelease: onResponderReleaseOrTerminate.bind(this),
             onResponderTerminate: onResponderReleaseOrTerminate.bind(this),
-            onResponderTerminationRequest: () => false, // Do not allow parent view to intercept gesture
+            // Do not allow parent view to intercept gesture
+            onResponderTerminationRequest: () => false,
             onResponderSingleTapConfirmed: () => {
-                this.props.onSingleTapConfirmed && this.props.onSingleTapConfirmed(this.currentPage);
+                if (this.props.onSingleTapConfirmed) {
+                    this.props.onSingleTapConfirmed(this.currentPage);
+                }
             },
         });
 
@@ -110,7 +118,7 @@ export default class Gallery extends React.Component {
                     transformer.onResponderGrant(evt, gestureState);
                 }
                 if (this.props.onLongPress) {
-                    this._longPressTimeout = setTimeout(() => {
+                    this.longPressTimeout = setTimeout(() => {
                         this.props.onLongPress(gestureState);
                     }, 600);
                 }
@@ -120,70 +128,22 @@ export default class Gallery extends React.Component {
                 if (transformer) {
                     transformer.onResponderMove(evt, gestureState);
                 }
-                clearTimeout(this._longPressTimeout);
+                clearTimeout(this.longPressTimeout);
             },
             onEnd: (evt, gestureState) => {
                 const transformer = this.getCurrentImageTransformer();
                 if (transformer) {
                     transformer.onResponderRelease(evt, gestureState);
                 }
-                clearTimeout(this._longPressTimeout);
+                clearTimeout(this.longPressTimeout);
             },
         };
     }
 
-    componentWillReceiveProps(props) {
-        console.log('GOT PROPS', props);
-    }
-
-    shouldComponentUpdate(nextProps, nextState) {
-        console.log('PROPS: ', this.props, nextProps);
-        console.log('STATE: ', this.state, nextState);
-        return true;
-    }
-
-    @autobind
-    activeImageResponder(evt, gestureState) {
-        if (this.activeResponder !== this.imageResponder) {
-            if (this.activeResponder === this.viewPagerResponder) {
-                // pass true to disable ViewPager settle
-                this.viewPagerResponder.onEnd(evt, gestureState, true);
-            }
-            this.activeResponder = this.imageResponder;
-            this.imageResponder.onStart(evt, gestureState);
-        }
-    }
-
-    @autobind
-    activeViewPagerResponder(evt, gestureState) {
-        if (this.activeResponder !== this.viewPagerResponder) {
-            if (this.activeResponder === this.imageResponder) {
-                this.imageResponder.onEnd(evt, gestureState);
-            }
-            this.activeResponder = this.viewPagerResponder;
-            this.viewPagerResponder.onStart(evt, gestureState);
-        }
-    }
-
-    @autobind
-    getImageTransformer(page) {
-        if (page >= 0 && page < this.pageCount) {
-            const ref = this.imageRefs.get(`${page}`);
-            if (ref) {
-                return ref.getViewTransformerInstance();
-            }
-        }
-        return null;
-    }
-
-    @autobind
-    getCurrentImageTransformer() {
-        return this.getImageTransformer(this.currentPage);
-    }
-
-    @autobind
-    getViewPagerInstance() {
-        return this.galleryViewPager;
+    shouldComponentUpdate() {
+        // Remount if another render is needed.
+        // Or fix this to check the correct parameters.
+        return false;
     }
 
     @autobind
@@ -209,13 +169,6 @@ export default class Gallery extends React.Component {
         if (this.props.onPageScroll) {
             this.props.onPageScroll(e);
         }
-    }
-
-    @autobind
-    hideLowRes(pageId) {
-        const key = `lowResImage#${pageId}`;
-        console.log(`hiding ${key}`);
-        this.imagesMounted[key] = false;
     }
 
     @autobind
@@ -252,6 +205,27 @@ export default class Gallery extends React.Component {
     }
 
     @autobind
+    getViewPagerInstance() {
+        return this.galleryViewPager;
+    }
+
+    @autobind
+    getCurrentImageTransformer() {
+        return this.getImageTransformer(this.currentPage);
+    }
+
+    @autobind
+    getImageTransformer(page) {
+        if (page >= 0 && page < this.pageCount) {
+            const ref = this.imageRefs.get(`${page}`);
+            if (ref) {
+                return ref.getViewTransformerInstance();
+            }
+        }
+        return null;
+    }
+
+    @autobind
     setImageLoaded(imageKey, dimensions) {
         this.imagesLoaded[imageKey] = true;
 
@@ -260,6 +234,36 @@ export default class Gallery extends React.Component {
                 ...this.imagesDimensions,
                 ...dimensions,
             };
+        }
+    }
+
+    @autobind
+    hideLowRes(pageId) {
+        const key = `lowResImage#${pageId}`;
+        console.log(`hiding ${key}`);
+        this.imagesMounted[key] = false;
+    }
+
+    @autobind
+    activeViewPagerResponder(evt, gestureState) {
+        if (this.activeResponder !== this.viewPagerResponder) {
+            if (this.activeResponder === this.imageResponder) {
+                this.imageResponder.onEnd(evt, gestureState);
+            }
+            this.activeResponder = this.viewPagerResponder;
+            this.viewPagerResponder.onStart(evt, gestureState);
+        }
+    }
+
+    @autobind
+    activeImageResponder(evt, gestureState) {
+        if (this.activeResponder !== this.imageResponder) {
+            if (this.activeResponder === this.viewPagerResponder) {
+                // pass true to disable ViewPager settle
+                this.viewPagerResponder.onEnd(evt, gestureState, true);
+            }
+            this.activeResponder = this.imageResponder;
+            this.imageResponder.onStart(evt, gestureState);
         }
     }
 
@@ -411,7 +415,11 @@ export default class Gallery extends React.Component {
                   key={key}
                   style={[style, overrideStyles, {backgroundColor: 'transparent'}]}
                   source={pageData.source}
-                  pixels={this.imagesDimensions[key] || pageData.dimensions || pageData.dimensions || {}}
+                  pixels={
+                      this.imagesDimensions[key]
+                      || pageData.dimensions
+                      || {}
+                  }
                   resizeMethod={'resize'}
                 >
                     { loadingView }
