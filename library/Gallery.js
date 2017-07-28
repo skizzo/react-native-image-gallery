@@ -25,6 +25,11 @@ export default class Gallery extends React.Component {
         imageComponent: Image,
     }
 
+    state = {
+        imagesLoaded: {},
+        imagesDimensions: {},
+    }
+
     componentWillMount() {
         this.imagesMounted = [];
         this.props.images.forEach((image, pageId) => {
@@ -34,8 +39,6 @@ export default class Gallery extends React.Component {
             this.imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
             this.animatedValues[key] = new Animated.Value(0.5);
         });
-        console.log('this.imagesMounted: ', this.imagesMounted);
-        console.log('animatedValues created: ', this.animatedValues);
 
         function onResponderReleaseOrTerminate(evt, gestureState) {
             if (this.activeResponder) {
@@ -147,12 +150,6 @@ export default class Gallery extends React.Component {
         };
     }
 
-    shouldComponentUpdate() {
-        // Remount if another render is needed.
-        // Or fix this to check the correct parameters.
-        return false;
-    }
-
     @autobind
     onPageSelected(page) {
         this.currentPage = page;
@@ -185,9 +182,7 @@ export default class Gallery extends React.Component {
                 source.uri,
                 (width, height) => {
                     this.setImageLoaded(imageKey, {width, height});
-                    console.log('SAY WHA?! loaded', imageKey);
                     if (this.animatedValues[imageKey]) {
-                        console.log('Will animate opacity', imageKey);
                         setTimeout(() => {
                             Animated.timing(
                                 this.animatedValues[imageKey],
@@ -199,7 +194,6 @@ export default class Gallery extends React.Component {
                             ).start((result) => {
                                 console.log('animated', result);
                                 this.hideLowRes(pageId);
-                                console.log(this.animatedValues[imageKey]);
                             });
                         });
                     }
@@ -233,21 +227,34 @@ export default class Gallery extends React.Component {
     }
 
     @autobind
-    setImageLoaded(imageKey, dimensions) {
-        this.imagesLoaded[imageKey] = true;
-
-        if (dimensions) {
-            this.imagesDimensions = {
-                ...this.imagesDimensions,
-                ...dimensions,
-            };
-        }
+    setImageLoaded(pageId, dimensions) {
+        this.setState({
+            imagesLoaded: {
+                ...this.state.imagesLoaded,
+                [pageId]: true,
+            },
+            imagesDimensions: {
+                ...this.state.imagesDimensions,
+                ...(dimensions ? {[pageId]: dimensions} : {}),
+            },
+        });
     }
+    // @autobind
+    // setImageLoaded(imageKey, dimensions) {
+    //     console.log('image loaded', imageKey);
+    //     this.imagesLoaded[imageKey] = true;
+    //
+    //     if (dimensions) {
+    //         this.imagesDimensions = {
+    //             ...this.imagesDimensions,
+    //             ...dimensions,
+    //         };
+    //     }
+    // }
 
     @autobind
     hideLowRes(pageId) {
         const key = `lowResImage#${pageId}`;
-        console.log(`hiding ${key}`);
         this.imagesMounted[key] = false;
     }
 
@@ -303,12 +310,28 @@ export default class Gallery extends React.Component {
     gestureResponder = undefined;
     animatedValues = [];
     galleryViewPager = null;
-    imagesLoaded = {};
-    imagesDimensions = {};
+    // imagesLoaded = {};
+    // imagesDimensions = {};
 
     @autobind
     isCurrentPage(pageId) {
         return parseInt(pageId) === this.currentPage;
+    }
+
+    @autobind
+    isAroundCurrentPage(pageId) {
+        const iPageId = parseInt(pageId);
+        const iCurrent = parseInt(this.currentPage);
+        if (iPageId === iCurrent) {
+            return true;
+        }
+        if (iPageId === iCurrent + 1) {
+            return true;
+        }
+        if (iPageId === iCurrent - 1) {
+            return true;
+        }
+        return false;
     }
 
     @autobind
@@ -351,25 +374,15 @@ export default class Gallery extends React.Component {
 
     @autobind
     renderLowRes(pageData, pageId, layout) {
-        const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
+        const {style, ...props} = this.props;
         const key = `lowResImage#${pageId}`;
-        const iPageId = parseInt(pageId);
 
-        let shouldMount = true;
-        if (iPageId > this.currentPage + 1) {
-            if (parseInt(this.currentPage) > 0 || iPageId < this.props.images.length - 1) {
-                shouldMount = false;
-            }
-        } else if (iPageId < this.currentPage - 1) {
-            shouldMount = false;
-        }
-
-        if (!shouldMount) {
+        if (!this.isAroundCurrentPage(pageId)) {
             return (
                 <View
                   {...props}
                   key={key}
-                  style={[{width: layout.width, height: layout.height}, style]}
+                  style={[{width: layout.width, height: layout.height}, this.props.style]}
                 />
             );
         }
@@ -386,40 +399,58 @@ export default class Gallery extends React.Component {
 
     @autobind
     renderHighRes(pageData, pageId, layout) {
+        const {style, ...props} = this.props;
         const key = `innerImage#${pageId}`;
 
-        console.log(`rendering ${key}`);
-        return (
-            <Animated.View
-              style={[
-                  this.props.style,
-                  {
-                      width: layout.width,
-                      height: layout.height,
-                  },
-                  // this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
-// FIXME:
-                  {opacity: this.animatedValues[key]},
-                  {
-                      borderWidth: 5,
-                      borderColor: 'red',
-                  },
-              ]}
-            >
-                {this.renderTransformable(
-                    pageData.source,
-                    pageData.dimensions,
-                    pageId,
-                    key,
-                    layout
-                )}
-            </Animated.View>
+        if (!this.isAroundCurrentPage(pageId)) {
+            return (
+                <View
+                  {...props}
+                  key={key}
+                  style={[{width: layout.width, height: layout.height}, style]}
+                />
+            );
+        }
+
+        return this.renderTransformable(
+            pageData.source,
+            pageData.dimensions,
+            pageId,
+            key,
+            layout
         );
+
+//         return (
+//             <Animated.View
+//               style={[
+//                   this.props.style,
+//                   {
+//                       width: layout.width,
+//                       height: layout.height,
+//                   },
+//                   // this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
+// // FIXME:
+//                   {opacity: this.animatedValues[key]},
+//                   {
+//                       borderWidth: 5,
+//                       borderColor: 'red',
+//                   },
+//               ]}
+//             >
+//                 {this.renderTransformable(
+//                     pageData.source,
+//                     pageData.dimensions,
+//                     pageId,
+//                     key,
+//                     layout
+//                 )}
+//             </Animated.View>
+//         );
     }
 
     renderTransformable(source, dimensions, pageId, key, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
-        const loaded = this.imagesLoaded[key] && this.imagesLoaded[key] === true;
+        const loaded = this.state.imagesLoaded[key] && this.state.imagesLoaded[key] === true;
         const loadingView = !loaded && loader ? loader : false;
 
         return (
@@ -429,11 +460,11 @@ export default class Gallery extends React.Component {
                   console.log('TransformableImage onLoad');
                   this.onLoad(pageId, source, key);
               }}
-              onLoadEnd={({nativeEvent}) => {
-                  console.log('Transformable loadEnd', nativeEvent);
+              onLoadEnd={() => {
+                  console.log('Transformable loadEnd');
               }}
-              onError={({nativeEvent}) => {
-                  console.log(`error loading ${key}`, nativeEvent);
+              onError={() => {
+                  console.log(`error loading ${key}`);
               }}
               onViewTransformed={((transform) => {
                   if (onViewTransformed) {
@@ -441,8 +472,6 @@ export default class Gallery extends React.Component {
                   }
               })}
               onTransformGestureReleased={((transform) => {
-                  console.log('TransformableImage onTransformGestureReleased');
-
                   if (onTransformGestureReleased) {
                       onTransformGestureReleased(transform, pageId);
                   }
@@ -458,7 +487,7 @@ export default class Gallery extends React.Component {
               ]}
               source={source}
               pixels={
-                  this.imagesDimensions[key]
+                  this.state.imagesDimensions[key]
                   || dimensions
                   || {}
               }
