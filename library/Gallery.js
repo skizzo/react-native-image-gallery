@@ -21,6 +21,10 @@ export default class Gallery extends React.Component {
         imageComponent: PropTypes.func,
     };
 
+    static defaultProps = {
+        imageComponent: Image,
+    }
+
     componentWillMount() {
         this.imagesMounted = [];
         this.props.images.forEach((image, pageId) => {
@@ -348,12 +352,9 @@ export default class Gallery extends React.Component {
     renderLowRes(pageData, pageId, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
         const key = `lowResImage#${pageId}`;
-        const ImageComponent = this.props.imageComponent
-            ? this.props.imageComponent
-            : Image;
 
         return (
-            <ImageComponent
+            <this.props.imageComponent
               {...props}
               // FIXME: Should maybe call a separate callback for low res
               onLoad={() => this.onLoad(pageId, pageData.source, key)}
@@ -396,15 +397,13 @@ export default class Gallery extends React.Component {
                       console.log('TransformableImage onLoad');
                       this.onLoad(pageId, pageData.source, key);
                   }}
-                  onLoadEnd={(res) => {
-                      console.log('Transformable loadEnd', res);
+                  onLoadEnd={({nativeEvent}) => {
+                      console.log('Transformable loadEnd', nativeEvent);
                   }}
-                  onError={() => {
-                      console.log(`error loading ${key}`);
+                  onError={({nativeEvent}) => {
+                      console.log(`error loading ${key}`, nativeEvent);
                   }}
                   onViewTransformed={((transform) => {
-                      console.log('TransformableImage onViewTransformed');
-
                       if (onViewTransformed) {
                           onViewTransformed(transform, pageId);
                       }
@@ -426,6 +425,7 @@ export default class Gallery extends React.Component {
                       || {}
                   }
                   resizeMethod={'resize'}
+                  imageComponent={this.props.imageComponent}
                 >
                     { loadingView }
                 </TransformableImage>
