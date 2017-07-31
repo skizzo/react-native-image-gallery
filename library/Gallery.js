@@ -23,21 +23,30 @@ export default class Gallery extends React.Component {
 
     static defaultProps = {
         imageComponent: Image,
+    };
+
+    state = {
+        imagesLoaded: {},
+        imagesMounted: {},
     }
 
     componentWillMount() {
-        this.imagesMounted = [];
+        const imagesMounted = {};
         this.props.images.forEach((image, pageId) => {
             const lowResKey = `lowResImage#${pageId}`;
             const key = `innerImage#${pageId}`;
-            this.imagesMounted[lowResKey] = !!(image.lowResSource);
-            this.imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
+            imagesMounted[lowResKey] = !!(image.lowResSource);
+            imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
             this.animatedValues[key] = new Animated.Value(0.5);
         });
 
         this.createGestureResponder();
         this.createViewPagerResponder();
         this.createImageResponder();
+
+        this.setState({
+            imagesMounted,
+        });
     }
 
     @autobind
@@ -70,28 +79,30 @@ export default class Gallery extends React.Component {
         if (source.uri) {
             Image.getSize(
                 source.uri,
-                (width, height) => {
-                    this.setImageLoaded(imageKey, {width, height});
-                    if (this.animatedValues[imageKey]) {
-                        setTimeout(() => {
-                            Animated.timing(
-                                this.animatedValues[imageKey],
-                                {
-                                    useNativeDriver: true,
-                                    toValue: 1,
-                                    duration: 1000, // FIXME: Configurable maybe?
-                                }
-                            ).start((result) => {
-                                console.log('animated', result);
-                                this.hideLowRes(pageId);
-                            });
-                        });
-                    }
-                },
+                (width, height) => this.onImageDimensions(width, height, pageId, imageKey),
                 () => this.setImageLoaded(imageKey, false)
             );
         } else {
             this.setImageLoaded(imageKey, false);
+        }
+    }
+
+    @autobind
+    onImageDimensions(width, height, pageId, imageKey) {
+        this.setImageLoaded(imageKey, {width, height});
+        if (this.animatedValues[imageKey]) {
+            setTimeout(() => {
+                Animated.timing(
+                    this.animatedValues[imageKey],
+                    {
+                        useNativeDriver: true,
+                        toValue: 1,
+                        duration: 200,
+                    }
+                ).start(() => {
+                    this.hideLowRes(pageId);
+                });
+            });
         }
     }
 
@@ -118,14 +129,19 @@ export default class Gallery extends React.Component {
 
     @autobind
     setImageLoaded(imageKey, dimensions) {
-        this.imagesLoaded[imageKey] = true;
-
         if (dimensions) {
             this.imagesDimensions = {
                 ...this.imagesDimensions,
                 ...dimensions,
             };
         }
+
+        this.setState({
+            imagesLoaded: {
+                ...this.state.imagesLoaded,
+                [imageKey]: true,
+            },
+        });
     }
 
     @autobind
@@ -249,7 +265,12 @@ export default class Gallery extends React.Component {
     @autobind
     hideLowRes(pageId) {
         const key = `lowResImage#${pageId}`;
-        this.imagesMounted[key] = false;
+        this.setState({
+            imagesMounted: {
+                ...this.state.imagesMounted,
+                [key]: false,
+            },
+        });
     }
 
     @autobind
@@ -304,7 +325,6 @@ export default class Gallery extends React.Component {
     gestureResponder = undefined;
     animatedValues = [];
     galleryViewPager = null;
-    imagesLoaded = {};
     imagesDimensions = {};
 
     @autobind
@@ -354,12 +374,18 @@ export default class Gallery extends React.Component {
             <View
               style={{width: layout.width, height: layout.height}}
             >
-                {this.imagesMounted[lowResKey]
+                {this.state.imagesMounted[lowResKey]
                     ? this.renderLowRes(pageData, pageId, layout)
                     : null
                 }
-                {this.imagesMounted[key]
-                    ? this.renderHighRes(pageData, pageId, layout)
+                {this.state.imagesMounted[key]
+                    ? this.renderHighRes(
+                        pageData,
+                        pageId,
+                        layout,
+                        this.state.imagesMounted[lowResKey] ?
+                            {backgroundColor: 'transparent'} : {}
+                    )
                     : null
                 }
             </View>
@@ -381,7 +407,6 @@ export default class Gallery extends React.Component {
             );
         }
 
-        console.log(`rendering ${key}`, layout);
         return this.renderTransformable(
             pageData.lowResSource,
             pageData.dimensions,
@@ -392,7 +417,7 @@ export default class Gallery extends React.Component {
     }
 
     @autobind
-    renderHighRes(pageData, pageId, layout) {
+    renderHighRes(pageData, pageId, layout, styles) {
         const {style, ...props} = this.props;
         const key = `innerImage#${pageId}`;
 
@@ -414,9 +439,8 @@ export default class Gallery extends React.Component {
                       width: layout.width,
                       height: layout.height,
                   },
-                  // this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
-// FIXME:
-                  {opacity: this.animatedValues[key]},
+                  this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
+                  styles,
               ]}
             >
                 {this.renderTransformable(
@@ -432,21 +456,14 @@ export default class Gallery extends React.Component {
 
     renderTransformable(source, dimensions, pageId, key, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
-        const loaded = this.imagesLoaded[key] && this.imagesLoaded[key] === true;
+        const loaded = this.state.imagesLoaded[key] && this.state.imagesLoaded[key] === true;
         const loadingView = !loaded && loader ? loader : false;
 
         return (
             <TransformableImage
               {...props}
               onLoad={() => {
-                  console.log('TransformableImage onLoad');
                   this.onLoad(pageId, source, key);
-              }}
-              onLoadEnd={() => {
-                  console.log('Transformable loadEnd');
-              }}
-              onError={() => {
-                  console.log(`error loading ${key}`);
               }}
               onViewTransformed={((transform) => {
                   if (onViewTransformed) {
