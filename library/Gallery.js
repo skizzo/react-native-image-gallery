@@ -498,7 +498,6 @@ export default class Gallery extends React.Component {
     }
 
     render() {
-        console.warn('rendering gallery');
         let gestureResponder = this.gestureResponder;
 
         let images = this.props.images;
