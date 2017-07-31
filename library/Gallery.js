@@ -25,11 +25,6 @@ export default class Gallery extends React.Component {
         imageComponent: Image,
     }
 
-    state = {
-        imagesLoaded: {},
-        imagesDimensions: {},
-    }
-
     componentWillMount() {
         this.imagesMounted = [];
         this.props.images.forEach((image, pageId) => {
@@ -40,114 +35,9 @@ export default class Gallery extends React.Component {
             this.animatedValues[key] = new Animated.Value(0.5);
         });
 
-        function onResponderReleaseOrTerminate(evt, gestureState) {
-            if (this.activeResponder) {
-                if (this.activeResponder === this.viewPagerResponder &&
-                    !this.shouldScrollViewPager(evt, gestureState) &&
-                    Math.abs(gestureState.vx) > 0.5) {
-                    this.activeResponder.onEnd(evt, gestureState, true);
-                    this.getViewPagerInstance().flingToPage(this.currentPage, gestureState.vx);
-                } else {
-                    this.activeResponder.onEnd(evt, gestureState);
-                }
-                this.activeResponder = null;
-            }
-            this.firstMove = true;
-            if (this.props.onGalleryStateChanged) {
-                this.props.onGalleryStateChanged(true);
-            }
-        }
-
-        this.gestureResponder = createResponder({
-            onStartShouldSetResponderCapture: () => true,
-            onStartShouldSetResponder: () => true,
-            onResponderGrant: (evt, gestureState) => {
-                this.activeImageResponder(evt, gestureState);
-            },
-            onResponderMove: (evt, gestureState) => {
-                const passOn = gestureState;
-                if (this.firstMove) {
-                    this.firstMove = false;
-                    if (this.shouldScrollViewPager(evt, gestureState)) {
-                        this.activeViewPagerResponder(evt, gestureState);
-                    }
-                    if (this.props.onGalleryStateChanged) {
-                        this.props.onGalleryStateChanged(false);
-                    }
-                }
-                if (this.activeResponder === this.viewPagerResponder) {
-                    const dx = gestureState.moveX - gestureState.previousMoveX;
-                    const offset = this.getViewPagerInstance().getScrollOffsetFromCurrentPage();
-                    if (dx > 0 && offset > 0 && !this.shouldScrollViewPager(evt, gestureState)) {
-                        if (dx > offset) { // active image responder
-                            this.getViewPagerInstance().scrollByOffset(offset);
-                            passOn.moveX -= offset;
-                            this.activeImageResponder(evt, gestureState);
-                        }
-                    } else if (
-                        dx < 0 &&
-                        offset < 0 &&
-                        !this.shouldScrollViewPager(evt, gestureState)
-                    ) {
-                        if (dx < offset) { // active image responder
-                            this.getViewPagerInstance().scrollByOffset(offset);
-                            passOn.moveX -= offset;
-                            this.activeImageResponder(evt, gestureState);
-                        }
-                    }
-                }
-                this.activeResponder.onMove(evt, passOn);
-            },
-            onResponderRelease: onResponderReleaseOrTerminate.bind(this),
-            onResponderTerminate: onResponderReleaseOrTerminate.bind(this),
-            // Do not allow parent view to intercept gesture
-            onResponderTerminationRequest: () => false,
-            onResponderSingleTapConfirmed: () => {
-                if (this.props.onSingleTapConfirmed) {
-                    this.props.onSingleTapConfirmed(this.currentPage);
-                }
-            },
-        });
-
-        this.viewPagerResponder = {
-            onStart: (evt, gestureState) => {
-                this.getViewPagerInstance().onResponderGrant(evt, gestureState);
-            },
-            onMove: (evt, gestureState) => {
-                this.getViewPagerInstance().onResponderMove(evt, gestureState);
-            },
-            onEnd: (evt, gestureState, disableSettle) => {
-                this.getViewPagerInstance().onResponderRelease(evt, gestureState, disableSettle);
-            },
-        };
-
-        this.imageResponder = {
-            onStart: (evt, gestureState) => {
-                const transformer = this.getCurrentImageTransformer();
-                if (transformer) {
-                    transformer.onResponderGrant(evt, gestureState);
-                }
-                if (this.props.onLongPress) {
-                    this.longPressTimeout = setTimeout(() => {
-                        this.props.onLongPress(gestureState);
-                    }, 600);
-                }
-            },
-            onMove: (evt, gestureState) => {
-                const transformer = this.getCurrentImageTransformer();
-                if (transformer) {
-                    transformer.onResponderMove(evt, gestureState);
-                }
-                clearTimeout(this.longPressTimeout);
-            },
-            onEnd: (evt, gestureState) => {
-                const transformer = this.getCurrentImageTransformer();
-                if (transformer) {
-                    transformer.onResponderRelease(evt, gestureState);
-                }
-                clearTimeout(this.longPressTimeout);
-            },
-        };
+        this.createGestureResponder();
+        this.createViewPagerResponder();
+        this.createImageResponder();
     }
 
     @autobind
@@ -227,30 +117,134 @@ export default class Gallery extends React.Component {
     }
 
     @autobind
-    setImageLoaded(pageId, dimensions) {
-        this.setState({
-            imagesLoaded: {
-                ...this.state.imagesLoaded,
-                [pageId]: true,
+    setImageLoaded(imageKey, dimensions) {
+        this.imagesLoaded[imageKey] = true;
+
+        if (dimensions) {
+            this.imagesDimensions = {
+                ...this.imagesDimensions,
+                ...dimensions,
+            };
+        }
+    }
+
+    @autobind
+    createGestureResponder() {
+        function onResponderReleaseOrTerminate(evt, gestureState) {
+            if (this.activeResponder) {
+                if (this.activeResponder === this.viewPagerResponder &&
+                    !this.shouldScrollViewPager(evt, gestureState) &&
+                    Math.abs(gestureState.vx) > 0.5) {
+                    this.activeResponder.onEnd(evt, gestureState, true);
+                    this.getViewPagerInstance().flingToPage(this.currentPage, gestureState.vx);
+                } else {
+                    this.activeResponder.onEnd(evt, gestureState);
+                }
+                this.activeResponder = null;
+            }
+            this.firstMove = true;
+            if (this.props.onGalleryStateChanged) {
+                this.props.onGalleryStateChanged(true);
+            }
+        }
+
+        this.gestureResponder = createResponder({
+            onStartShouldSetResponderCapture: () => true,
+            onStartShouldSetResponder: () => true,
+            onResponderGrant: (evt, gestureState) => {
+                this.activeImageResponder(evt, gestureState);
             },
-            imagesDimensions: {
-                ...this.state.imagesDimensions,
-                ...(dimensions ? {[pageId]: dimensions} : {}),
+            onResponderMove: (evt, gestureState) => {
+                const passOn = gestureState;
+                if (this.firstMove) {
+                    this.firstMove = false;
+                    if (this.shouldScrollViewPager(evt, gestureState)) {
+                        this.activeViewPagerResponder(evt, gestureState);
+                    }
+                    if (this.props.onGalleryStateChanged) {
+                        this.props.onGalleryStateChanged(false);
+                    }
+                }
+                if (this.activeResponder === this.viewPagerResponder) {
+                    const dx = gestureState.moveX - gestureState.previousMoveX;
+                    const offset = this.getViewPagerInstance().getScrollOffsetFromCurrentPage();
+                    if (dx > 0 && offset > 0 && !this.shouldScrollViewPager(evt, gestureState)) {
+                        if (dx > offset) { // active image responder
+                            this.getViewPagerInstance().scrollByOffset(offset);
+                            passOn.moveX -= offset;
+                            this.activeImageResponder(evt, gestureState);
+                        }
+                    } else if (
+                        dx < 0 &&
+                        offset < 0 &&
+                        !this.shouldScrollViewPager(evt, gestureState)
+                    ) {
+                        if (dx < offset) { // active image responder
+                            this.getViewPagerInstance().scrollByOffset(offset);
+                            passOn.moveX -= offset;
+                            this.activeImageResponder(evt, gestureState);
+                        }
+                    }
+                }
+                this.activeResponder.onMove(evt, passOn);
+            },
+            onResponderRelease: onResponderReleaseOrTerminate.bind(this),
+            onResponderTerminate: onResponderReleaseOrTerminate.bind(this),
+            // Do not allow parent view to intercept gesture
+            onResponderTerminationRequest: () => false,
+            onResponderSingleTapConfirmed: () => {
+                if (this.props.onSingleTapConfirmed) {
+                    this.props.onSingleTapConfirmed(this.currentPage);
+                }
             },
         });
     }
-    // @autobind
-    // setImageLoaded(imageKey, dimensions) {
-    //     console.log('image loaded', imageKey);
-    //     this.imagesLoaded[imageKey] = true;
-    //
-    //     if (dimensions) {
-    //         this.imagesDimensions = {
-    //             ...this.imagesDimensions,
-    //             ...dimensions,
-    //         };
-    //     }
-    // }
+
+    @autobind
+    createViewPagerResponder() {
+        this.viewPagerResponder = {
+            onStart: (evt, gestureState) => {
+                this.getViewPagerInstance().onResponderGrant(evt, gestureState);
+            },
+            onMove: (evt, gestureState) => {
+                this.getViewPagerInstance().onResponderMove(evt, gestureState);
+            },
+            onEnd: (evt, gestureState, disableSettle) => {
+                this.getViewPagerInstance().onResponderRelease(evt, gestureState, disableSettle);
+            },
+        };
+    }
+
+    @autobind
+    createImageResponder() {
+        this.imageResponder = {
+            onStart: (evt, gestureState) => {
+                const transformer = this.getCurrentImageTransformer();
+                if (transformer) {
+                    transformer.onResponderGrant(evt, gestureState);
+                }
+                if (this.props.onLongPress) {
+                    this.longPressTimeout = setTimeout(() => {
+                        this.props.onLongPress(gestureState);
+                    }, 600);
+                }
+            },
+            onMove: (evt, gestureState) => {
+                const transformer = this.getCurrentImageTransformer();
+                if (transformer) {
+                    transformer.onResponderMove(evt, gestureState);
+                }
+                clearTimeout(this.longPressTimeout);
+            },
+            onEnd: (evt, gestureState) => {
+                const transformer = this.getCurrentImageTransformer();
+                if (transformer) {
+                    transformer.onResponderRelease(evt, gestureState);
+                }
+                clearTimeout(this.longPressTimeout);
+            },
+        };
+    }
 
     @autobind
     hideLowRes(pageId) {
@@ -310,8 +304,8 @@ export default class Gallery extends React.Component {
     gestureResponder = undefined;
     animatedValues = [];
     galleryViewPager = null;
-    // imagesLoaded = {};
-    // imagesDimensions = {};
+    imagesLoaded = {};
+    imagesDimensions = {};
 
     @autobind
     isCurrentPage(pageId) {
@@ -438,7 +432,7 @@ export default class Gallery extends React.Component {
 
     renderTransformable(source, dimensions, pageId, key, layout) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
-        const loaded = this.state.imagesLoaded[key] && this.state.imagesLoaded[key] === true;
+        const loaded = this.imagesLoaded[key] && this.imagesLoaded[key] === true;
         const loadingView = !loaded && loader ? loader : false;
 
         return (
@@ -475,7 +469,7 @@ export default class Gallery extends React.Component {
               ]}
               source={source}
               pixels={
-                  this.state.imagesDimensions[key]
+                  this.imagesDimensions[key]
                   || dimensions
                   || {}
               }
