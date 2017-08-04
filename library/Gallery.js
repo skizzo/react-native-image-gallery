@@ -1,9 +1,12 @@
 import React, {PropTypes} from 'react';
-import {View, Image, Animated} from 'react-native';
+import {View, Image, Animated, Dimensions} from 'react-native';
 import autobind from 'autobind-decorator';
 import {createResponder} from 'react-native-gesture-responder';
 import TransformableImage from 'react-native-transformable-image';
 import ViewPager from '@ldn0x7dc/react-native-view-pager';
+
+const KEY_LOW_RES = 'lowResImage';
+const KEY_HIGH_RES = 'innerImage';
 
 export default class Gallery extends React.Component {
 
@@ -31,11 +34,6 @@ export default class Gallery extends React.Component {
     }
 
     componentWillMount() {
-        this.props.images.forEach((image, pageId) => {
-            const key = `innerImage#${pageId}`;
-            this.animatedValues[key] = new Animated.Value(0.5);
-        });
-
         this.createGestureResponder();
         this.createViewPagerResponder();
         this.createImageResponder();
@@ -92,16 +90,51 @@ export default class Gallery extends React.Component {
         this.setImageLoaded(imageKey, {width, height});
         if (this.animatedValues[imageKey]) {
             setTimeout(() => {
-                Animated.timing(
-                    this.animatedValues[imageKey],
-                    {
-                        useNativeDriver: true,
-                        toValue: 1,
-                        duration: 200,
+                const seq = [];
+                const lowResKey = `${KEY_LOW_RES}#${pageId}`;
+                const lowResSource = this.props.images[pageId].lowResSource;
+                const animatableScale = this.imagesDimensions[lowResKey].transform.scale;
+                if (lowResSource && lowResSource.width && lowResSource.height && animatableScale) {
+                    let scale;
+                    const windowDimensions = Dimensions.get('window');
+                    const widthScale = windowDimensions.width / width;
+                    const heightScale = windowDimensions.height / height;
+
+                    if (widthScale < heightScale) {
+                        const targetHeight = height * widthScale;
+                        scale = targetHeight / lowResSource.height;
+                    } else {
+                        const targetWidth = width * heightScale;
+                        scale = targetWidth / lowResSource.width;
                     }
-                ).start(() => {
-                    this.hideLowRes(pageId);
-                });
+
+                    // Scale low res
+                    seq.push(
+                        Animated.timing(
+                            animatableScale,
+                            {
+                                useNativeDriver: true,
+                                toValue: scale,
+                                duration: 200,
+                            }
+                        )
+                    );
+                }
+
+                // Fade high res in
+                seq.push(
+                    Animated.timing(
+                        this.animatedValues[imageKey],
+                        {
+                            useNativeDriver: true,
+                            toValue: 1,
+                            duration: 200,
+                        }
+                    )
+                );
+
+                Animated.sequence(seq)
+                    .start(() => { this.hideLowRes(pageId); });
             });
         }
     }
@@ -110,8 +143,8 @@ export default class Gallery extends React.Component {
     getMountedImagesArray() {
         const imagesMounted = {};
         this.props.images.forEach((image, pageId) => {
-            const lowResKey = `lowResImage#${pageId}`;
-            const key = `innerImage#${pageId}`;
+            const lowResKey = `${KEY_LOW_RES}#${pageId}`;
+            const key = `${KEY_HIGH_RES}#${pageId}`;
             imagesMounted[lowResKey] = !!(image.lowResSource);
             imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
         });
@@ -144,8 +177,13 @@ export default class Gallery extends React.Component {
         if (dimensions) {
             this.imagesDimensions = {
                 ...this.imagesDimensions,
-                ...dimensions,
+                [imageKey]: dimensions,
             };
+            if (imageKey.indexOf(KEY_LOW_RES) === 0) {
+                this.imagesDimensions[imageKey].transform = {
+                    scale: new Animated.Value(1),
+                };
+            }
         }
 
         this.setState({
@@ -276,11 +314,10 @@ export default class Gallery extends React.Component {
 
     @autobind
     hideLowRes(pageId) {
-        const key = `lowResImage#${pageId}`;
         this.setState({
             imagesMounted: {
                 ...this.state.imagesMounted,
-                [key]: false,
+                [`${KEY_LOW_RES}#${pageId}`]: false,
             },
         });
     }
@@ -380,8 +417,13 @@ export default class Gallery extends React.Component {
 
     @autobind
     renderPage(pageData, pageId, layout) {
-        const lowResKey = `lowResImage#${pageId}`;
-        const key = `innerImage#${pageId}`;
+        const lowResKey = `${KEY_LOW_RES}#${pageId}`;
+        const key = `${KEY_HIGH_RES}#${pageId}`;
+        if (!this.state.imagesMounted[key]) {
+            // reset the animated value if high res is not shown
+            this.animatedValues[key] = new Animated.Value(0);
+        }
+
         return (
             <View
               style={{width: layout.width, height: layout.height}}
@@ -407,7 +449,7 @@ export default class Gallery extends React.Component {
     @autobind
     renderLowRes(pageData, pageId, layout) {
         const {style, ...props} = this.props;
-        const key = `lowResImage#${pageId}`;
+        const key = `${KEY_LOW_RES}#${pageId}`;
 
         if (!this.isAroundCurrentPage(pageId)) {
             return (
@@ -419,19 +461,19 @@ export default class Gallery extends React.Component {
             );
         }
 
-        return this.renderTransformable(
-            pageData.lowResSource,
-            pageData.dimensions,
+        return this.renderTransformable({
+            source: pageData.lowResSource,
+            dimensions: pageData.dimensions,
             pageId,
             key,
-            layout
-        );
+            resizeMode: 'center',
+        });
     }
 
     @autobind
     renderHighRes(pageData, pageId, layout, styles) {
         const {style, ...props} = this.props;
-        const key = `innerImage#${pageId}`;
+        const key = `${KEY_HIGH_RES}#${pageId}`;
 
         if (!this.isAroundCurrentPage(pageId)) {
             return (
@@ -455,23 +497,21 @@ export default class Gallery extends React.Component {
                   styles,
               ]}
             >
-                {this.renderTransformable(
-                    pageData.source,
-                    pageData.dimensions,
+                {this.renderTransformable({
+                    source: pageData.source,
+                    dimensions: pageData.dimensions,
                     pageId,
                     key,
-                    layout
-                )}
+                })}
             </Animated.View>
         );
     }
 
-    renderTransformable(source, dimensions, pageId, key, layout) {
+    renderTransformable({source, dimensions, pageId, key, resizeMode = 'contain'}) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
         const loaded = this.state.imagesLoaded[key] && this.state.imagesLoaded[key] === true;
         const loadingView = !loaded && loader ? loader : false;
 
-        console.log('rendering transformable image', source);
         return (
             <TransformableImage
               {...props}
@@ -491,11 +531,7 @@ export default class Gallery extends React.Component {
               ref={((ref) => { this.imageRefs.set(pageId, ref); })}
               style={[
                   style,
-                  {
-                      width: layout.width,
-                      height: layout.height,
-                      backgroundColor: 'transparent',
-                  },
+                  {backgroundColor: 'transparent'},
               ]}
               source={source}
               pixels={
@@ -504,6 +540,7 @@ export default class Gallery extends React.Component {
                   || {}
               }
               imageComponent={this.props.imageComponent}
+              resizeMode={resizeMode}
             >
                 { loadingView }
             </TransformableImage>
