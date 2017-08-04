@@ -31,12 +31,8 @@ export default class Gallery extends React.Component {
     }
 
     componentWillMount() {
-        const imagesMounted = {};
         this.props.images.forEach((image, pageId) => {
-            const lowResKey = `lowResImage#${pageId}`;
             const key = `innerImage#${pageId}`;
-            imagesMounted[lowResKey] = !!(image.lowResSource);
-            imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
             this.animatedValues[key] = new Animated.Value(0.5);
         });
 
@@ -45,16 +41,20 @@ export default class Gallery extends React.Component {
         this.createImageResponder();
 
         this.setState({
-            imagesMounted,
+            imagesMounted: this.getMountedImagesArray(),
         });
     }
 
     @autobind
-    onPageSelected(page) {
-        this.currentPage = page;
+    onPageSelected(pageId) {
+        this.currentPage = pageId;
         if (this.props.onPageSelected) {
-            this.props.onPageSelected(page);
+            this.props.onPageSelected(pageId);
         }
+
+        this.setState({
+            imagesMounted: this.getMountedImagesArray(),
+        });
     }
 
     @autobind
@@ -104,6 +104,18 @@ export default class Gallery extends React.Component {
                 });
             });
         }
+    }
+
+    @autobind
+    getMountedImagesArray() {
+        const imagesMounted = {};
+        this.props.images.forEach((image, pageId) => {
+            const lowResKey = `lowResImage#${pageId}`;
+            const key = `innerImage#${pageId}`;
+            imagesMounted[lowResKey] = !!(image.lowResSource);
+            imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
+        });
+        return imagesMounted;
     }
 
     @autobind
@@ -459,6 +471,7 @@ export default class Gallery extends React.Component {
         const loaded = this.state.imagesLoaded[key] && this.state.imagesLoaded[key] === true;
         const loadingView = !loaded && loader ? loader : false;
 
+        console.log('rendering transformable image', source);
         return (
             <TransformableImage
               {...props}
