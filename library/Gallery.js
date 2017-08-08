@@ -351,7 +351,6 @@ export default class Gallery extends React.Component {
     hideLowRes(pageId) {
         const lowResKey = `${KEY_LOW_RES}#${pageId}`;
         this.imagesHidden[lowResKey] = true;
-        console.log(this.imagesHidden);
         this.setState({
             imagesMounted: {
                 ...this.state.imagesMounted,
