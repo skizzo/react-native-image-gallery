@@ -90,51 +90,7 @@ export default class Gallery extends React.Component {
         this.setImageLoaded(imageKey, {width, height});
         if (this.animatedValues[imageKey]) {
             setTimeout(() => {
-                const seq = [];
-                const lowResKey = `${KEY_LOW_RES}#${pageId}`;
-                const lowResSource = this.props.images[pageId].lowResSource;
-                const animatableScale = this.imagesDimensions[lowResKey].transform.scale;
-                if (lowResSource && lowResSource.width && lowResSource.height && animatableScale) {
-                    let scale;
-                    const windowDimensions = Dimensions.get('window');
-                    const widthScale = windowDimensions.width / width;
-                    const heightScale = windowDimensions.height / height;
-
-                    if (widthScale < heightScale) {
-                        const targetHeight = height * widthScale;
-                        scale = targetHeight / lowResSource.height;
-                    } else {
-                        const targetWidth = width * heightScale;
-                        scale = targetWidth / lowResSource.width;
-                    }
-
-                    // Scale low res
-                    seq.push(
-                        Animated.timing(
-                            animatableScale,
-                            {
-                                useNativeDriver: true,
-                                toValue: scale,
-                                duration: 200,
-                            }
-                        )
-                    );
-                }
-
-                // Fade high res in
-                seq.push(
-                    Animated.timing(
-                        this.animatedValues[imageKey],
-                        {
-                            useNativeDriver: true,
-                            toValue: 1,
-                            duration: 200,
-                        }
-                    )
-                );
-
-                Animated.sequence(seq)
-                    .start(() => { this.hideLowRes(pageId); });
+                this.animateResize(pageId, imageKey, width, height);
             });
         }
     }
@@ -145,8 +101,22 @@ export default class Gallery extends React.Component {
         this.props.images.forEach((image, pageId) => {
             const lowResKey = `${KEY_LOW_RES}#${pageId}`;
             const key = `${KEY_HIGH_RES}#${pageId}`;
-            imagesMounted[lowResKey] = !!(image.lowResSource);
-            imagesMounted[key] = (this.isCurrentPage(pageId) || !image.lowResSource);
+
+            let mountLowRes;
+            let mountHighRes;
+            if (!image.lowResSource) {
+                mountHighRes = true;
+                mountLowRes = false;
+            } else if (this.isAroundCurrentPage(pageId)) {
+                mountHighRes = true;
+                mountLowRes = !this.imagesHidden[lowResKey];
+            } else {
+                mountHighRes = false;
+                mountLowRes = true;
+            }
+
+            imagesMounted[lowResKey] = mountLowRes;
+            imagesMounted[key] = mountHighRes;
         });
         return imagesMounted;
     }
@@ -192,6 +162,71 @@ export default class Gallery extends React.Component {
                 [imageKey]: true,
             },
         });
+    }
+
+    @autobind
+    animateResize(pageId, imageKey, width, height) {
+        const lowResKey = `${KEY_LOW_RES}#${pageId}`;
+        if (!this.state.imagesMounted[lowResKey]) {
+            return;
+        }
+
+        const lowResSource = this.props.images[pageId].lowResSource;
+        if (!lowResSource) {
+            return;
+        }
+        if (!lowResSource.width) {
+            return;
+        }
+        if (!lowResSource.height) {
+            return;
+        }
+
+        const animatableScale = this.imagesDimensions[lowResKey].transform.scale;
+        if (!animatableScale) {
+            return;
+        }
+
+        const seq = [];
+        let scale;
+        const windowDimensions = Dimensions.get('window');
+        const widthScale = windowDimensions.width / width;
+        const heightScale = windowDimensions.height / height;
+
+        if (widthScale < heightScale) {
+            const targetHeight = height * widthScale;
+            scale = targetHeight / lowResSource.height;
+        } else {
+            const targetWidth = width * heightScale;
+            scale = targetWidth / lowResSource.width;
+        }
+
+        // Scale low res
+        seq.push(
+            Animated.timing(
+                animatableScale,
+                {
+                    useNativeDriver: true,
+                    toValue: scale,
+                    duration: 200,
+                }
+            )
+        );
+
+        // Fade high res in
+        seq.push(
+            Animated.timing(
+                this.animatedValues[imageKey],
+                {
+                    useNativeDriver: true,
+                    toValue: 1,
+                    duration: 200,
+                }
+            )
+        );
+
+        Animated.sequence(seq)
+            .start(() => { this.hideLowRes(pageId); });
     }
 
     @autobind
@@ -314,6 +349,9 @@ export default class Gallery extends React.Component {
 
     @autobind
     hideLowRes(pageId) {
+        const lowResKey = `${KEY_LOW_RES}#${pageId}`;
+        this.imagesHidden[lowResKey] = true;
+        console.log(this.imagesHidden);
         this.setState({
             imagesMounted: {
                 ...this.state.imagesMounted,
@@ -375,6 +413,7 @@ export default class Gallery extends React.Component {
     animatedValues = [];
     galleryViewPager = null;
     imagesDimensions = {};
+    imagesHidden = {}
 
     @autobind
     isCurrentPage(pageId) {
@@ -419,7 +458,7 @@ export default class Gallery extends React.Component {
     renderPage(pageData, pageId, layout) {
         const lowResKey = `${KEY_LOW_RES}#${pageId}`;
         const key = `${KEY_HIGH_RES}#${pageId}`;
-        if (!this.state.imagesMounted[key]) {
+        if (!this.state.imagesMounted[key] || !this.imagesDimensions[key]) {
             // reset the animated value if high res is not shown
             this.animatedValues[key] = new Animated.Value(0);
         }
@@ -492,8 +531,8 @@ export default class Gallery extends React.Component {
                   {
                       width: layout.width,
                       height: layout.height,
+                      opacity: this.animatedValues[key],
                   },
-                  this.isInitialPage(pageId) ? {} : {opacity: this.animatedValues[key]},
                   styles,
               ]}
             >
