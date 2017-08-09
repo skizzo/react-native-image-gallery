@@ -1,5 +1,5 @@
 import React, {PropTypes} from 'react';
-import {View, Image, Animated, Dimensions} from 'react-native';
+import {View, Image, Animated, Dimensions, PixelRatio} from 'react-native';
 import autobind from 'autobind-decorator';
 import {createResponder} from 'react-native-gesture-responder';
 import TransformableImage from 'react-native-transformable-image';
@@ -190,8 +190,8 @@ export default class Gallery extends React.Component {
         const seq = [];
         let scale;
         const windowDimensions = Dimensions.get('window');
-        const widthScale = windowDimensions.width / width;
-        const heightScale = windowDimensions.height / height;
+        const widthScale = PixelRatio.getPixelSizeForLayoutSize(windowDimensions.width) / width;
+        const heightScale = PixelRatio.getPixelSizeForLayoutSize(windowDimensions.height) / height;
 
         if (widthScale < heightScale) {
             const targetHeight = height * widthScale;
