@@ -29,7 +29,6 @@ export default class Gallery extends React.Component {
     };
 
     state = {
-        imagesLoaded: {},
         imagesMounted: {},
     }
 
@@ -156,12 +155,7 @@ export default class Gallery extends React.Component {
             }
         }
 
-        this.setState({
-            imagesLoaded: {
-                ...this.state.imagesLoaded,
-                [imageKey]: true,
-            },
-        });
+        this.imagesLoaded[imageKey] = (dimensions !== false);
     }
 
     @autobind
@@ -412,7 +406,8 @@ export default class Gallery extends React.Component {
     animatedValues = [];
     galleryViewPager = null;
     imagesDimensions = {};
-    imagesHidden = {}
+    imagesHidden = {};
+    imagesLoaded = {};
 
     @autobind
     isCurrentPage(pageId) {
@@ -547,7 +542,7 @@ export default class Gallery extends React.Component {
 
     renderTransformable({source, dimensions, pageId, key, resizeMode = 'contain'}) {
         const {onViewTransformed, onTransformGestureReleased, loader, style, ...props} = this.props;
-        const loaded = this.state.imagesLoaded[key] && this.state.imagesLoaded[key] === true;
+        const loaded = this.imagesLoaded[key] && this.imagesLoaded[key] === true;
         const loadingView = !loaded && loader ? loader : false;
 
         return (
